@@ -1,0 +1,222 @@
+---
+title: "Logistic Regression Homework"
+author: "Samrawit Feleke"
+date: "November 25, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In class, let's use the email dataset in the "openintro" package to try to predict spam, start by using to_multiple, cc, attach, dollar, winner, inherit, viagra password, format, re-subj and exlaim-subj, in the final model only use variables that are contributing. Divide the data set into test and train prior to model reduction. Lastly use your model to predict spam on the data then assess how well you did by generating "hit rate" and a ROC curve. How good is your model?
+
+## Set Working Directory
+```{r}
+getwd() # see current working directory
+setwd("/Users/Samrawit/Desktop") # set project to appropriate working directory
+```
+
+Install Packages & Load Libraries
+```{r, include=FALSE}
+library(ResourceSelection)
+library(pROC)
+library(pscl)
+library(ISLR)
+library(dplyr)
+library(ROCR)
+library(bestglm)
+#install.packages("openintro")
+library(openintro)
+```
+
+##  Import data from csv
+```{r}
+# Import Data
+library(openintro) 
+
+# Restore it under a different name
+saveRDS(email, "emaildata.rds")
+email <- readRDS("emaildata.rds")
+head(email,6)
+```
+
+# Observe Data
+```{r}
+## Observe Data
+#colnames(email)
+names(email) #view names
+head(email,6) # examine first 6 rows
+str(email) # structure of data 
+length(email) #shows us length of 21 columns
+nrow(email) #shows us rows of 3921
+class(email) # shows us that it is a data.frame
+#summary(email)
+```
+
+## 1. Use the email dataset in the "openintro" package to try to predict spam. Start by using to_multiple, cc, attach, dollar, winner, inherit, viagra, password, format, re-subj and exlaim-subj
+
+
+## 1.1 Convert Necessary Variables to Factors (Use "As.Factor" function) 
+```{r}
+str(email)
+email$spam <- as.factor(email$spam) #spam
+email$to_multiple <- as.factor(email$to_multiple)
+
+email$format <- as.factor(email$format)
+email$re_subj <- as.factor(email$re_subj)
+email$password <- as.factor(email$password)
+email$exclaim_subj <- as.factor(email$exclaim_subj)
+```
+
+##2. Divide the data set into test and train prior to model reduction.
+```{r}
+train <- email[1:3700, ] 
+test <- email[3701:3921, ] # there is a more systematic way of doing this 
+
+## Binomial Logistic Regression
+# The dependent or outcome variable in binary predictive logistic model is holds 0 or 1, yes or no, success or failure; spam or no spam values.
+
+#The syntax for logistic regression is the same as lm(), but here we must use the glm() or "Generalized Linear Model" function. This is because glm() supports other distributions and transforms our dependent variable. For logistic regression, we must use the model family as "binomial" and the "link" function which is great for transforming our dependent variable as "logit."
+
+# #Run Logistic regression with family=binomial(link="logit") predicting for spam
+email_model1 <- glm(spam~to_multiple+cc+attach+dollar+winner+inherit+viagra+password+format+re_subj+exclaim_subj,family="binomial"(link = "logit"),train)
+summary(email_model1)
+
+# For example, we can see that the log odds of an email being a spam increases by attach by 0.21808 
+# We can also see that the log odds of an email being a spam decreases by re_subj1 by 3.01580
+```
+
+```{r}
+#We must drop cc, dollar, inherit, viagra, password, exclaim_subj
+# Cross Validation with Binary Logistic Predictions
+# Fit the model on the training data
+email_model2 <- glm(spam~to_multiple+attach+winner+format+re_subj,family="binomial"(link = "logit"),train)
+summary(email_model2) # The AIC is 1472.4 email_model2 which is less and thus better than email_model1 AIC of 1481.6
+
+# Looks like to_multiple, attach, winner, format and re_subj are the strongest predictors of Spam emails.
+```
+
+## 3. In the final model only use variables that are contributing.
+```{r}
+# Plot coefficients of email_model2
+# Again, looking at the AIC of 1472.4 for email_model2 which is less and thus better than email_model1 AIC of 1481.6 we chose the model 2 or email_model2. 
+require(coefplot)
+coefplot(email_model2)
+
+# Transforming coefficients
+log.odds.email = coef(email_model2) # Obtain just the coefficients
+log.odds.email 
+
+# #The output is express in log odds, but we can convert to % via exp() function. In order to covert Log-Odds to multiplicative in odds we must use the following function:
+#exp(coef(email_model2))
+odds <- exp(coef(email_model2)) 
+odds # Check it out
+
+# In order to covert odds to probabilities we must use do the following:
+prob = odds/(1+odds) 
+prob # Check it out
+
+# create a table binding Log-Odds, Odds and Probabilities
+cbind(log.odds.email, odds, prob)
+
+```
+
+
+## 4. Lastly use your model to predict spam on the data then assess how well you did by generating "hit rate" and a ROC curve. How good is your model?
+```{r}
+# ROC Curve
+#Use Roc Curve guage how well we are classifying the data in combination with the predict function
+library(pROC)
+prob=plogis(predict(email_model2, type = c("response")))
+head(prob) # to predict the likelyhood of a email being a spam
+
+#Lets plot our hit "rate hit"
+h <- roc(spam~prob, data = train)
+h # We see here that the Area under the curve is 0.809 and since it is above 0.80, we can be confident in saying that the model does a good job in differentiating between the two categories in the dependent variable "Spam" 
+# add confusion matrix and adjusted threshold
+
+plot(h) # plot of Roc curve
+
+##Test Our Models using Hosmer-Lemeshow Test
+library(ResourceSelection)
+hoslem.test(train$spam, fitted(email_model2)) 
+
+#Test Our Models Goodness of Fit using Pseudo R^2
+library(pscl)
+pR2(email_model2) # 'McFadden' is 0.19505136 or .2 and since the value is a way from zero then we can consider our model as having some predictive power but not the best.
+
+```
+
+```{r}
+
+# prediction
+# evaluate our model 
+pred.email_model2 <- predict.glm(email_model2,test,type='response')
+head(pred.email_model2) # the likelyhood of them being Spam is small 
+
+pred.email_model2.1 <- ifelse(pred.email_model2 > 0.5,1,0) # if the model prediction is greater than .5 make it 1, else make it 0
+#Essentially we are creating percentage likelihood of default for each value, above 50% we are saying it's more likely to occur. 
+#We can modify this threshold based on whether we are more interested in sensitivity than specificity.
+
+head(pred.email_model2.1) # since they were all less than .05 they became zeros.
+
+pred.email_model3hit <- mean(pred.email_model2.1!=test$spam) # comparing the average of the prediction
+pred.email_model3hit # prediction result of 0.5248869
+
+```
+
+```{r}
+# Use AUC For New Prediction Performance With Our Model
+library(ROCR)
+newpred <- prediction(pred.email_model2.1, test$spam)
+
+#Measuring true possitives which is "tpr" and also False Positives "fpr"
+newpred.performance <- performance(newpred, measure = "tpr", x.measure = "fpr")
+plot(newpred.performance, colorize=TRUE) # looks good
+
+# Compute AUC
+#Since the performance() object is a list we must use @ for extracting values in the list
+AUC <- performance(newpred, measure = "auc")
+AUC
+
+#We can extract the Area under the ROC curve
+#y.name - variables names are stored
+#AUC- the AUC is stored
+c(AUC@y.name[[1]], AUC@y.values[[1]]) # "Area under the ROC curve" "0.516666666666667"
+# Hence, looking at our accuracy or Area Under the ROC Curve, an area of .52 is below the perfect test of 1 and we can clearly see that it falls short in this case.
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
