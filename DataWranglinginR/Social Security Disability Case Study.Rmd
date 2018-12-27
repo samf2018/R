@@ -1,0 +1,154 @@
+---
+title: "Social Security Disability Case Study"
+author: "Samrawit Feleke"
+date: "12/26/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/Samrawit/Desktop")
+```
+
+```{r, include=FALSE}
+# Load Library
+library(tidyverse)
+library(lubridate)
+library(stringr)
+options(warn=-1)
+```
+
+### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+### Coal dataset
+#### Data Wrangling in R
+```{r}
+#Read coal dataset
+Social_Security <- read_csv("Social_Security_Disability.csv")
+
+#remove 1st column value 
+Social_Security <- Social_Security[,-1]
+head(Social_Security)
+
+# column names
+colnames(Social_Security)
+```
+
+#### Structure of the dataset
+```{r}
+glimpse(Social_Security)
+```
+#### Transform to long dataset
+```{r}
+Social_Security_long <- gather(Social_Security, month, applications, -Fiscal_Year)
+
+# View result
+print(Social_Security_long, n=20)
+```
+#### Split the month and application type
+```{r}
+Social_Security_long <- separate(Social_Security_long, month, c("month", "application_method"), sep="_")
+
+# View result
+print(Social_Security_long, n=20)
+
+```
+#### Convert month to standard abbreviations
+```{r}
+# Values for months
+unique(Social_Security_long$month)
+```
+
+
+```{r}
+# Convert month to standard abbreviations
+Social_Security_long$month <- substr(Social_Security_long$month,1,3)
+
+```
+
+
+```{r}
+# Values for months and years
+unique(Social_Security_long$month)
+unique(Social_Security_long$Fiscal_Year)
+```
+
+#### Convert Fiscal_Year from alphanumeric strings to actual years
+```{r}
+Social_Security_long$Fiscal_Year <- str_replace(Social_Security_long$Fiscal_Year, "FY", "20")
+
+# values for months
+unique(Social_Security_long$Fiscal_Year)
+
+```
+#### Build a date string using the first day of the month
+```{r}
+paste('01', Social_Security_long$month, Social_Security_long$Fiscal_Year)
+
+Social_Security_long$Date <- dmy(paste("01", Social_Security_long$month, Social_Security$Fiscal_Year))
+
+# Unique values
+unique(Social_Security_long$Date)
+```
+
+
+
+* Government fiscal years differ from calendar years in that they are named for the calendar year where they end.  The government fiscal year begins in October.
+* Thus, October 2016 is actually in FY17.
+* We must convert these values to calendar dates before we try to plot them, so we need to find months >=10 and subtract one year from them
+
+```{r}
+# Looking for affected rows
+advanced_dates <- which(month(Social_Security_long$Date)>=10)
+
+# Decerement the years by one
+year(Social_Security_long$Date[advanced_dates]) <- year(Social_Security_long$Date[advanced_dates]) - 1
+
+# View Summary of dataset
+summary(Social_Security_long)
+```
+
+```{r}
+# Remove Fiscal_Year and month columns
+Social_Security_long$Fiscal_Year <- NULL
+Social_Security_long$month <- NULL
+
+# Convert application_method to a factor
+Social_Security_long$application_method <- as.factor(Social_Security_long$application_method)
+
+# Summary of dataset
+summary(Social_Security_long)
+
+# Widen the final dataset
+Social_Security <- spread(Social_Security_long, application_method, applications)
+
+# View result
+print(Social_Security,n=20)
+
+```
+
+#### Plot percentage of applicats that were online
+```{r}
+# Add a column to see the percentage of applicats that were online
+Social_Security$online_percentage <- Social_Security$Internet/Social_Security$Total*100
+
+# Plot the results
+ggplot(data=Social_Security, mapping=aes(x=Date,y=online_percentage)) +
+  geom_point()
+  
+  
+```
+
+#### Write clean CSV in R
+```{r}
+write.csv(Social_Security, file = "Social_Security_Disability_final_version.csv")
+```
+
+
